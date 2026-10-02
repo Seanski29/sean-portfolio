@@ -247,7 +247,7 @@ function HomePage({ navigate, openContact }) {
             </div>
           </div>
           <div className="order-1 mx-auto flex w-full max-w-lg items-center justify-center opacity-0 animate-[fadeInUp_0.8s_ease-out_0.4s_forwards] lg:order-2 lg:ml-auto">
-            <img src="/photo.png" alt="Sean Martin Del Rosario" className="max-h-[75vh] w-full object-contain portrait-mask" />
+            <img src="/portrait.png" alt="Sean Martin Del Rosario" className="max-h-[75vh] w-full object-contain portrait-mask" />
           </div>
         </section>
         <section id="about" className="mx-auto w-full max-w-4xl border-t border-white/5 px-6 py-24 text-center">
