@@ -1,0 +1,16 @@
+# Dependencies (The main cause of deployment timeouts)
+node_modules/
+
+# Production/Build outputs
+dist/
+build/
+
+# Local configuration and environment logs
+.DS_Store
+*.log
+.env
+.env.local
+
+# IDE/Editor configs
+.vscode/
+.idea/
