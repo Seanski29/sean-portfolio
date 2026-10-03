@@ -17,6 +17,7 @@ import {
   Globe2,
   GripVertical,
   Image,
+  Info,
   Laptop,
   Linkedin,
   LogOut,
@@ -74,6 +75,39 @@ const iconMap = {
   Globe2,
   Sparkles,
 };
+
+const techStack = [
+  {
+    name: "React",
+    role: "Component-based frontend UI",
+    logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg",
+  },
+  {
+    name: "Vite",
+    role: "Fast local development and production builds",
+    logo: "https://vitejs.dev/logo.svg",
+  },
+  {
+    name: "Tailwind CSS",
+    role: "Responsive styling system and utility classes",
+    logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/tailwindcss/tailwindcss-original.svg",
+  },
+  {
+    name: "Firebase",
+    role: "Authentication and Firestore content database",
+    logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/firebase/firebase-plain.svg",
+  },
+  {
+    name: "Vercel",
+    role: "Deployment, hosting, and environment variables",
+    logo: "https://assets.vercel.com/image/upload/front/favicon/vercel/180x180.png",
+  },
+  {
+    name: "GitHub",
+    role: "Source control and deployment trigger",
+    logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/github/github-original.svg",
+  },
+];
 
 const defaultPortfolio = {
   profile: {
@@ -261,6 +295,7 @@ function App() {
   const [portfolio, setPortfolio, syncStatus] = usePersistentPortfolio();
   const [route, setRoute] = useState(() => getRoute());
   const [isContactOpen, setContactOpen] = useState(false);
+  const [isStackOpen, setStackOpen] = useState(false);
   const [isAdmin, setAdmin] = useState(() => !isFirebaseConfigured && window.localStorage.getItem(AUTH_KEY) === "true");
 
   useEffect(() => {
@@ -308,7 +343,7 @@ function App() {
   };
 
   const project = route.kind === "project" ? portfolio.projects.find((item) => item.id === route.id) : null;
-  const pageProps = { portfolio, setPortfolio, syncStatus, navigate, openContact: () => setContactOpen(true), isAdmin, logout };
+  const pageProps = { portfolio, setPortfolio, syncStatus, navigate, openContact: () => setContactOpen(true), openStack: () => setStackOpen(true), isAdmin, logout };
 
   return (
     <>
@@ -320,6 +355,7 @@ function App() {
       {route.kind === "media" && <PortfolioListing {...pageProps} type="media" />}
       {route.kind === "home" && <HomePage {...pageProps} />}
       <ContactModal portfolio={portfolio} isOpen={isContactOpen} onClose={() => setContactOpen(false)} />
+      <TechStackModal isOpen={isStackOpen} onClose={() => setStackOpen(false)} />
     </>
   );
 }
@@ -414,7 +450,7 @@ function PageShell({ children, tone = "blue" }) {
   );
 }
 
-function Nav({ portfolio, navigate, active = "home", openContact, isAdmin, logout }) {
+function Nav({ portfolio, navigate, active = "home", openContact, openStack, isAdmin, logout }) {
   const [isOpen, setOpen] = useState(false);
   const navItems = [
     { label: "About", action: () => goHomeSection(navigate, "about") },
@@ -445,6 +481,9 @@ function Nav({ portfolio, navigate, active = "home", openContact, isAdmin, logou
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
+          <button onClick={openStack} className="rounded-md border border-white/15 p-2 text-gray-300 transition hover:bg-white/10 hover:text-white" aria-label="View website tech stack" title="Website tech stack">
+            <Info className="h-4 w-4" />
+          </button>
           <button onClick={openContact} className="rounded-md border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition hover:bg-white/10">Contact</button>
           {portfolio.profile.resumeUrl && (
             <a href={portfolio.profile.resumeUrl} target="_blank" rel="noreferrer" className="rounded-md bg-blue-500 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition hover:bg-blue-400">Resume</a>
@@ -465,6 +504,9 @@ function Nav({ portfolio, navigate, active = "home", openContact, isAdmin, logou
                 {item.label}
               </button>
             ))}
+            <button onClick={() => click(openStack)} className="flex items-center gap-2 rounded-md px-4 py-3 text-left text-sm font-semibold uppercase tracking-[0.16em] text-gray-300 hover:bg-white/5 hover:text-white">
+              <Info className="h-4 w-4" /> Site Stack
+            </button>
             <button onClick={() => click(openContact)} className="rounded-md px-4 py-3 text-left text-sm font-semibold uppercase tracking-[0.16em] text-gray-300 hover:bg-white/5 hover:text-white">Contact</button>
             {isAdmin && <button onClick={logout} className="flex items-center gap-2 rounded-md px-4 py-3 text-left text-sm font-semibold uppercase tracking-[0.16em] text-red-200 hover:bg-red-500/10"><LogOut className="h-4 w-4" /> Logout</button>}
           </div>
@@ -489,13 +531,13 @@ function scrollToSection(id) {
   window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 84, behavior: "smooth" });
 }
 
-function HomePage({ portfolio, navigate, openContact, isAdmin, logout }) {
+function HomePage({ portfolio, navigate, openContact, openStack, isAdmin, logout }) {
   const featured = portfolio.projects.filter((project) => project.featured).slice(0, 4);
   const typed = useTypewriter(["React interfaces.", "business dashboards.", "hardware workflows.", "media systems."]);
 
   return (
     <PageShell>
-      <Nav portfolio={portfolio} navigate={navigate} openContact={openContact} isAdmin={isAdmin} logout={logout} />
+      <Nav portfolio={portfolio} navigate={navigate} openContact={openContact} openStack={openStack} isAdmin={isAdmin} logout={logout} />
       <main className="relative z-10">
         <section className="mx-auto grid min-h-[calc(100vh-64px)] max-w-7xl grid-cols-1 items-center gap-12 px-4 pb-20 pt-28 sm:px-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="max-w-3xl">
@@ -588,13 +630,13 @@ function HomePage({ portfolio, navigate, openContact, isAdmin, logout }) {
   );
 }
 
-function PortfolioListing({ portfolio, type, navigate, openContact, isAdmin, logout }) {
+function PortfolioListing({ portfolio, type, navigate, openContact, openStack, isAdmin, logout }) {
   const tone = type === "media" ? "amber" : "blue";
   const projects = portfolio.projects.filter((project) => project.type === type);
 
   return (
     <PageShell tone={tone}>
-      <Nav portfolio={portfolio} navigate={navigate} active={type} openContact={openContact} isAdmin={isAdmin} logout={logout} />
+      <Nav portfolio={portfolio} navigate={navigate} active={type} openContact={openContact} openStack={openStack} isAdmin={isAdmin} logout={logout} />
       <main className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-32 sm:px-6">
         <button onClick={() => navigate("/")} className="mb-10 inline-flex items-center gap-2 text-sm font-bold text-gray-400 transition hover:text-white">
           <ArrowLeft className="h-4 w-4" /> Home
@@ -612,14 +654,14 @@ function PortfolioListing({ portfolio, type, navigate, openContact, isAdmin, log
   );
 }
 
-function ProjectDetail({ portfolio, project, navigate, openContact, isAdmin, logout }) {
+function ProjectDetail({ portfolio, project, navigate, openContact, openStack, isAdmin, logout }) {
   const tone = project.type === "media" ? "amber" : "blue";
   const paragraphs = splitLines(project.details || project.excerpt);
   const gallery = [project.mediaUrl, ...(project.gallery || [])].filter(Boolean);
 
   return (
     <PageShell tone={tone}>
-      <Nav portfolio={portfolio} navigate={navigate} active={project.type} openContact={openContact} isAdmin={isAdmin} logout={logout} />
+      <Nav portfolio={portfolio} navigate={navigate} active={project.type} openContact={openContact} openStack={openStack} isAdmin={isAdmin} logout={logout} />
       <main className="relative z-10 mx-auto max-w-5xl px-4 pb-24 pt-32 sm:px-6">
         <button onClick={() => navigate(project.type === "media" ? "/media" : "/it")} className="mb-10 inline-flex items-center gap-2 text-sm font-bold text-gray-400 transition hover:text-white">
           <ArrowLeft className="h-4 w-4" /> Back to {project.type === "media" ? "Media" : "IT"}
@@ -740,6 +782,70 @@ function Footer({ navigate }) {
         &copy; {new Date().getFullYear()} Sean Martin Del Rosario. All Rights Reserved.
       </button>
     </footer>
+  );
+}
+
+function TechStackModal({ isOpen, onClose }) {
+  return (
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 transition ${isOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}>
+      <button className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} aria-label="Close tech stack modal" />
+      <section className={`relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-white/10 bg-zinc-950 shadow-2xl transition ${isOpen ? "scale-100" : "scale-95"}`}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-400/10 text-blue-200">
+              <Info className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">Website Stack</p>
+              <h2 className="text-xl font-black text-white">How this portfolio is built</h2>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-md border border-white/10 p-2 text-gray-400 transition hover:bg-white/10 hover:text-white" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="space-y-4">
+            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
+              <h3 className="text-lg font-black text-white">Why it exists</h3>
+              <p className="mt-3 leading-7 text-gray-400">
+                This portfolio is built for recruiters, collaborators, and clients who need a quick but credible view of Sean's development work, media experience, and project thinking.
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
+              <h3 className="text-lg font-black text-white">How it works</h3>
+              <p className="mt-3 leading-7 text-gray-400">
+                The public site is a responsive React app. The hidden admin area uses Firebase Authentication and Firestore so portfolio content can be edited without touching code.
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
+              <h3 className="text-lg font-black text-white">Deployment flow</h3>
+              <p className="mt-3 leading-7 text-gray-400">
+                Code changes are pushed to GitHub, then Vercel builds and deploys the site. Runtime Firebase settings are stored as environment variables instead of being committed to Git.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-4 text-lg font-black text-white">Technologies</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {techStack.map((tech) => (
+                <article key={tech.name} className="flex items-center gap-4 rounded-lg border border-white/10 bg-white/[0.035] p-4">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-white p-2">
+                    <img src={tech.logo} alt={`${tech.name} logo`} className="h-full w-full object-contain" loading="lazy" />
+                  </span>
+                  <span>
+                    <span className="block font-black text-white">{tech.name}</span>
+                    <span className="mt-1 block text-sm leading-5 text-gray-400">{tech.role}</span>
+                  </span>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
