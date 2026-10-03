@@ -34,12 +34,20 @@ import {
   User,
   X,
 } from "lucide-react";
+import {
+  isFirebaseConfigured,
+  listenForAdmin,
+  loadCloudPortfolio,
+  saveCloudPortfolio,
+  signInAdmin,
+  signOutAdmin,
+} from "./services/firebase";
 import "./styles.css";
 
 const STORAGE_KEY = "smdr_portfolio_content_v2";
 const AUTH_KEY = "smdr_admin_authenticated";
 const ADMIN_USERNAME = "sean";
-const ADMIN_PASSWORD = "2468";
+const LOCAL_ADMIN_PASSWORD = "2468";
 
 const iconOptions = [
   "Code2",
@@ -250,15 +258,19 @@ const defaultPortfolio = {
 };
 
 function App() {
-  const [portfolio, setPortfolio] = usePersistentPortfolio();
+  const [portfolio, setPortfolio, syncStatus] = usePersistentPortfolio();
   const [route, setRoute] = useState(() => getRoute());
   const [isContactOpen, setContactOpen] = useState(false);
-  const [isAdmin, setAdmin] = useState(() => window.localStorage.getItem(AUTH_KEY) === "true");
+  const [isAdmin, setAdmin] = useState(() => !isFirebaseConfigured && window.localStorage.getItem(AUTH_KEY) === "true");
 
   useEffect(() => {
     const onPopState = () => setRoute(getRoute());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    return listenForAdmin(setAdmin);
   }, []);
 
   const navigate = (to) => {
@@ -267,8 +279,17 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const login = (username, password) => {
-    if (username.trim().toLowerCase() !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+  const login = async (username, password) => {
+    if (username.trim().toLowerCase() !== ADMIN_USERNAME) {
+      return false;
+    }
+    if (isFirebaseConfigured) {
+      await signInAdmin(password);
+      setAdmin(true);
+      navigate("/admin");
+      return true;
+    }
+    if (password !== LOCAL_ADMIN_PASSWORD) {
       return false;
     }
     window.localStorage.setItem(AUTH_KEY, "true");
@@ -277,14 +298,17 @@ function App() {
     return true;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (isFirebaseConfigured) {
+      await signOutAdmin();
+    }
     window.localStorage.removeItem(AUTH_KEY);
     setAdmin(false);
     navigate("/");
   };
 
   const project = route.kind === "project" ? portfolio.projects.find((item) => item.id === route.id) : null;
-  const pageProps = { portfolio, setPortfolio, navigate, openContact: () => setContactOpen(true), isAdmin, logout };
+  const pageProps = { portfolio, setPortfolio, syncStatus, navigate, openContact: () => setContactOpen(true), isAdmin, logout };
 
   return (
     <>
@@ -319,16 +343,52 @@ function usePersistentPortfolio() {
       return defaultPortfolio;
     }
   });
+  const [syncStatus, setSyncStatus] = useState(isFirebaseConfigured ? "Connecting to Firebase..." : "Local browser storage");
+
+  useEffect(() => {
+    let active = true;
+    async function loadPortfolio() {
+      if (!isFirebaseConfigured) return;
+      try {
+        const cloudPortfolio = await loadCloudPortfolio();
+        if (!active) return;
+        if (cloudPortfolio) {
+          const merged = mergePortfolio(defaultPortfolio, cloudPortfolio);
+          setPortfolioState(merged);
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          setSyncStatus("Synced with Firebase");
+          return;
+        }
+        setSyncStatus("Firebase ready - no cloud content yet");
+      } catch (error) {
+        console.error(error);
+        if (active) setSyncStatus("Firebase unavailable - using local copy");
+      }
+    }
+    loadPortfolio();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const setPortfolio = (updater) => {
     setPortfolioState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      if (isFirebaseConfigured) {
+        setSyncStatus("Saving to Firebase...");
+        saveCloudPortfolio(next)
+          .then(() => setSyncStatus("Saved to Firebase"))
+          .catch((error) => {
+            console.error(error);
+            setSyncStatus("Cloud save failed - kept locally");
+          });
+      }
       return next;
     });
   };
 
-  return [portfolio, setPortfolio];
+  return [portfolio, setPortfolio, syncStatus];
 }
 
 function mergePortfolio(base, saved) {
@@ -719,11 +779,21 @@ function AdminLogin({ navigate, login }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setSubmitting] = useState(false);
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
-    const ok = login(username, password);
-    if (!ok) setError("Invalid admin credentials.");
+    setError("");
+    setSubmitting(true);
+    try {
+      const ok = await login(username, password);
+      if (!ok) setError("Invalid admin credentials.");
+    } catch (error) {
+      console.error(error);
+      setError("Login failed. Check Firebase Auth setup and admin credentials.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -745,8 +815,8 @@ function AdminLogin({ navigate, login }) {
             <AdminField label="Password" value={password} onChange={setPassword} type="password" />
           </div>
           {error && <p className="mt-4 rounded-md border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</p>}
-          <button className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-blue-100">
-            Login <ArrowRight className="h-4 w-4" />
+          <button disabled={isSubmitting} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60">
+            {isSubmitting ? "Logging in..." : "Login"} <ArrowRight className="h-4 w-4" />
           </button>
         </form>
       </main>
@@ -754,10 +824,23 @@ function AdminLogin({ navigate, login }) {
   );
 }
 
-function AdminDashboard({ portfolio, setPortfolio, navigate, logout }) {
+function AdminDashboard({ portfolio, setPortfolio, syncStatus, navigate, logout }) {
   const [tab, setTab] = useState("content");
-  const [editingId, setEditingId] = useState("");
+  const [editingId, setEditingId] = useState(portfolio.projects[0]?.id || "");
   const editingProject = portfolio.projects.find((project) => project.id === editingId) || null;
+
+  const selectProject = (id) => {
+    setEditingId(id);
+    window.setTimeout(() => {
+      document.getElementById("project-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
+  useEffect(() => {
+    if (!editingId && portfolio.projects.length > 0) {
+      setEditingId(portfolio.projects[0].id);
+    }
+  }, [editingId, portfolio.projects]);
 
   const updateProfile = (field, value) => {
     setPortfolio((current) => ({ ...current, profile: { ...current.profile, [field]: value } }));
@@ -835,6 +918,7 @@ function AdminDashboard({ portfolio, setPortfolio, navigate, logout }) {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-300">Admin Mode</p>
               <h1 className="text-2xl font-black text-white">Portfolio Control Room</h1>
+              <p className="mt-1 text-sm text-gray-500">{syncStatus}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => navigate("/")} className="rounded-md border border-white/15 px-4 py-2 text-sm font-bold text-white hover:bg-white/10">Visitor View</button>
@@ -884,23 +968,24 @@ function AdminDashboard({ portfolio, setPortfolio, navigate, logout }) {
                   <button onClick={() => addProject("it")} className="inline-flex items-center gap-2 rounded-md bg-blue-500 px-4 py-2 text-sm font-bold text-white"><Plus className="h-4 w-4" /> Add IT Project</button>
                   <button onClick={() => addProject("media")} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-zinc-950"><Plus className="h-4 w-4" /> Add Media Project</button>
                 </div>
-                <div className="grid gap-5 xl:grid-cols-[340px_1fr]">
-                  <div className="space-y-2">
+                <div className="grid gap-6">
+                  <div className="grid gap-3 lg:grid-cols-2">
                     {portfolio.projects.map((project, index) => (
-                      <div key={project.id} className={`flex w-full items-center justify-between gap-3 rounded-md border p-4 text-left transition ${editingId === project.id ? "border-blue-300 bg-blue-400/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}>
+                      <div key={project.id} onClick={() => selectProject(project.id)} className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-md border p-4 text-left transition ${editingId === project.id ? "border-blue-300 bg-blue-400/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}>
                         <span className="min-w-0">
-                          <button onClick={() => setEditingId(project.id)} className="block max-w-full truncate text-left font-bold text-white">{project.title}</button>
+                          <span className="block max-w-full truncate text-left font-bold text-white">{project.title}</span>
                           <span className="text-xs uppercase tracking-[0.14em] text-gray-500">{project.type} / {project.category}</span>
                         </span>
-                        <span className="flex shrink-0 gap-1">
+                        <span className="flex shrink-0 flex-wrap justify-end gap-1">
+                          <button type="button" onClick={(event) => { event.stopPropagation(); selectProject(project.id); }} className="rounded-md border border-blue-300/30 px-3 py-2 text-xs font-bold text-blue-100 transition hover:bg-blue-500/10">Edit</button>
                           <IconButton icon={GripVertical} />
-                          <IconButton icon={ArrowLeft} disabled={index === 0} onClick={() => moveProject(project.id, -1)} />
-                          <IconButton icon={ArrowRight} disabled={index === portfolio.projects.length - 1} onClick={() => moveProject(project.id, 1)} />
+                          <IconButton icon={ArrowLeft} disabled={index === 0} onClick={(event) => { event.stopPropagation(); moveProject(project.id, -1); }} />
+                          <IconButton icon={ArrowRight} disabled={index === portfolio.projects.length - 1} onClick={(event) => { event.stopPropagation(); moveProject(project.id, 1); }} />
                         </span>
                       </div>
                     ))}
                   </div>
-                  <div>
+                  <div id="project-editor" className="scroll-mt-24">
                     {editingProject ? (
                       <ProjectEditor project={editingProject} updateProject={updateProject} deleteProject={deleteProject} navigate={navigate} />
                     ) : (
@@ -973,7 +1058,7 @@ function ProjectEditor({ project, updateProject, deleteProject, navigate }) {
         <AdminArea label="Gallery URLs, one per line" value={galleryText} onChange={(value) => setField("gallery", splitLines(value))} rows={8} />
       </div>
       <div className="mt-6 flex items-center gap-2 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-        <Save className="h-4 w-4" /> Changes save automatically in this browser.
+        <Save className="h-4 w-4" /> Changes save automatically. With Firebase configured, they sync to Firestore.
       </div>
     </div>
   );

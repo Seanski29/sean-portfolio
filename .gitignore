@@ -1,5 +1,6 @@
 # Dependencies (The main cause of deployment timeouts)
 node_modules/
+.npm-cache/
 
 # Production/Build outputs
 dist/
