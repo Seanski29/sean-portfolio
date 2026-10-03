@@ -292,7 +292,7 @@ const defaultPortfolio = {
 };
 
 function App() {
-  const [portfolio, setPortfolio, syncStatus] = usePersistentPortfolio();
+  const [portfolio, setPortfolio, syncStatus, isLoading] = usePersistentPortfolio();
   const [route, setRoute] = useState(() => getRoute());
   const [isContactOpen, setContactOpen] = useState(false);
   const [isStackOpen, setStackOpen] = useState(false);
@@ -343,7 +343,7 @@ function App() {
   };
 
   const project = route.kind === "project" ? portfolio.projects.find((item) => item.id === route.id) : null;
-  const pageProps = { portfolio, setPortfolio, syncStatus, navigate, openContact: () => setContactOpen(true), openStack: () => setStackOpen(true), isAdmin, logout };
+  const pageProps = { portfolio, setPortfolio, syncStatus, isLoading, navigate, openContact: () => setContactOpen(true), openStack: () => setStackOpen(true), isAdmin, logout };
 
   return (
     <>
@@ -380,11 +380,21 @@ function usePersistentPortfolio() {
     }
   });
   const [syncStatus, setSyncStatus] = useState(isFirebaseConfigured ? "Connecting to Firebase..." : "Local browser storage");
+  const [isLoading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
+    const finishLoading = () => {
+      window.setTimeout(() => {
+        if (active) setLoading(false);
+      }, 450);
+    };
+
     async function loadPortfolio() {
-      if (!isFirebaseConfigured) return;
+      if (!isFirebaseConfigured) {
+        finishLoading();
+        return;
+      }
       try {
         const cloudPortfolio = await loadCloudPortfolio();
         if (!active) return;
@@ -399,6 +409,8 @@ function usePersistentPortfolio() {
       } catch (error) {
         console.error(error);
         if (active) setSyncStatus("Firebase unavailable - using local copy");
+      } finally {
+        finishLoading();
       }
     }
     loadPortfolio();
@@ -424,7 +436,7 @@ function usePersistentPortfolio() {
     });
   };
 
-  return [portfolio, setPortfolio, syncStatus];
+  return [portfolio, setPortfolio, syncStatus, isLoading];
 }
 
 function mergePortfolio(base, saved) {
@@ -442,9 +454,9 @@ function mergePortfolio(base, saved) {
 
 function PageShell({ children, tone = "blue" }) {
   return (
-    <div className={`min-h-screen overflow-x-hidden bg-zinc-950 text-gray-300 antialiased selection:text-white ${tone === "amber" ? "selection:bg-amber-900/50" : "selection:bg-blue-900/50"}`}>
-      <div className="fixed inset-x-0 top-0 z-0 h-[640px] bg-[linear-gradient(180deg,rgba(24,24,27,0.98)_0%,rgba(9,9,11,0.92)_48%,rgba(9,9,11,0)_100%)]" />
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(1200px_620px_at_50%_-20%,rgba(37,99,235,0.16),transparent_60%)]" />
+    <div className={`site-shell min-h-screen overflow-x-hidden bg-[#020817] text-gray-300 antialiased selection:text-white ${tone === "amber" ? "selection:bg-amber-900/50" : "selection:bg-blue-900/50"}`}>
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[linear-gradient(180deg,rgba(2,8,23,0.92)_0%,rgba(2,8,23,0.72)_46%,rgba(2,8,23,0.96)_100%)]" />
+      <div className="pointer-events-none fixed inset-0 z-0 opacity-40 blueprint-grid" />
       {children}
     </div>
   );
@@ -465,28 +477,31 @@ function Nav({ portfolio, navigate, active = "home", openContact, openStack, isA
   };
 
   return (
-    <nav className="fixed top-0 z-50 w-full border-b border-white/10 bg-zinc-950/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+    <nav className="fixed top-0 z-50 w-full border-b border-sky-300/10 bg-[#020817]/82 backdrop-blur-xl">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-white/5 text-xs font-black text-white">SD</span>
-          <span className="hidden text-sm font-bold tracking-[0.18em] text-white sm:block">SMDR</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-sky-300/20 bg-sky-400/10 text-xs font-black text-white shadow-[inset_0_0_24px_rgba(14,165,233,0.16)]">SD</span>
+          <span className="hidden leading-tight sm:block">
+            <span className="block text-sm font-black tracking-[0.18em] text-white">SMDR</span>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300">Portfolio</span>
+          </span>
         </button>
 
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="hidden items-center rounded-full border border-white/10 bg-white/[0.035] p-1 md:flex">
           {navItems.map((item) => (
-            <button key={item.label} onClick={() => item.action()} className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition ${active === item.label.toLowerCase() ? "bg-white text-zinc-950" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}>
+            <button key={item.label} onClick={() => item.action()} className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition ${active === item.label.toLowerCase() ? "bg-sky-400 text-[#020817]" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}>
               {item.label}
             </button>
           ))}
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
-          <button onClick={openStack} className="rounded-md border border-white/15 p-2 text-gray-300 transition hover:bg-white/10 hover:text-white" aria-label="View website tech stack" title="Website tech stack">
+          <button onClick={openStack} className="rounded-lg border border-white/15 p-2.5 text-gray-300 transition hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-white" aria-label="View website tech stack" title="Website tech stack">
             <Info className="h-4 w-4" />
           </button>
-          <button onClick={openContact} className="rounded-md border border-white/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition hover:bg-white/10">Contact</button>
+          <button onClick={openContact} className="rounded-full bg-sky-400 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-[#020817] transition hover:bg-sky-300">Let's Talk</button>
           {portfolio.profile.resumeUrl && (
-            <a href={portfolio.profile.resumeUrl} target="_blank" rel="noreferrer" className="rounded-md bg-blue-500 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition hover:bg-blue-400">Resume</a>
+            <a href={portfolio.profile.resumeUrl} target="_blank" rel="noreferrer" className="rounded-full border border-orange-300/30 px-5 py-3 text-xs font-bold uppercase tracking-[0.16em] text-orange-100 transition hover:bg-orange-400/10">Resume</a>
           )}
           {isAdmin && <button onClick={logout} className="rounded-md border border-red-400/30 px-3 py-2 text-red-200 transition hover:bg-red-500/10" aria-label="Logout"><LogOut className="h-4 w-4" /></button>}
         </div>
@@ -531,7 +546,7 @@ function scrollToSection(id) {
   window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 84, behavior: "smooth" });
 }
 
-function HomePage({ portfolio, navigate, openContact, openStack, isAdmin, logout }) {
+function HomePage({ portfolio, navigate, openContact, openStack, isAdmin, logout, isLoading }) {
   const featured = portfolio.projects.filter((project) => project.featured).slice(0, 4);
   const typed = useTypewriter(["React interfaces.", "business dashboards.", "hardware workflows.", "media systems."]);
 
@@ -539,83 +554,98 @@ function HomePage({ portfolio, navigate, openContact, openStack, isAdmin, logout
     <PageShell>
       <Nav portfolio={portfolio} navigate={navigate} openContact={openContact} openStack={openStack} isAdmin={isAdmin} logout={logout} />
       <main className="relative z-10">
-        <section className="mx-auto grid min-h-[calc(100vh-64px)] max-w-7xl grid-cols-1 items-center gap-12 px-4 pb-20 pt-28 sm:px-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-12 px-4 pb-20 pt-32 sm:px-6 lg:grid-cols-[1.02fr_0.98fr]">
           <div className="max-w-3xl">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-md border border-blue-400/20 bg-blue-400/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-200">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-400/10 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-sky-200">
               <Check className="h-4 w-4" /> {portfolio.profile.eyebrow}
             </div>
-            <h1 className="text-4xl font-black leading-[1.02] tracking-tight text-white sm:text-6xl lg:text-7xl">
-              {portfolio.profile.name}
+            <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-tight text-white sm:text-7xl lg:text-8xl">
+              Developer for <span className="text-sky-400">useful</span> digital products.
             </h1>
-            <p className="mt-6 max-w-2xl text-xl leading-8 text-gray-300 sm:text-2xl">{portfolio.profile.headline}</p>
+            <p className="mt-6 text-lg font-semibold uppercase tracking-[0.2em] text-orange-200">{portfolio.profile.name}</p>
+            <p className="mt-5 max-w-2xl text-xl leading-8 text-gray-300 sm:text-2xl">{portfolio.profile.headline}</p>
             <p className="mt-5 max-w-2xl text-base leading-7 text-gray-400">{portfolio.profile.summary}</p>
             <div className="mt-8 min-h-8 text-lg font-medium text-gray-400">
               Building <span className="text-white">{typed}</span><span className="animate-blink text-blue-300">|</span>
             </div>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <button onClick={() => scrollToSection("work")} className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-blue-100">
-                View Work <ArrowRight className="h-4 w-4" />
+              <button onClick={() => scrollToSection("work")} className="inline-flex items-center justify-center gap-2 rounded-full bg-sky-400 px-6 py-4 text-sm font-black uppercase tracking-[0.12em] text-[#020817] transition hover:bg-sky-300">
+                View Projects <ArrowRight className="h-4 w-4" />
               </button>
-              <button onClick={openContact} className="inline-flex items-center justify-center gap-2 rounded-md border border-white/15 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">
+              <button onClick={openContact} className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-4 text-sm font-black uppercase tracking-[0.12em] text-white transition hover:border-orange-300/40 hover:bg-orange-400/10">
                 Contact Sean <Mail className="h-4 w-4" />
               </button>
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-[480px] lg:ml-auto">
-            <div className="absolute inset-x-8 bottom-0 h-2/3 rounded-t-[2rem] bg-blue-500/10" />
-            <img src={portfolio.profile.portrait || "/portrait.png"} alt={portfolio.profile.name} className="relative z-10 mx-auto max-h-[660px] w-full object-contain portrait-mask" />
+          <div className="relative mx-auto w-full max-w-[520px] lg:ml-auto">
+            <div className="absolute inset-6 rounded-[2rem] border border-sky-300/20 bg-sky-400/10 hero-line-field" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] pt-8 shadow-[0_30px_100px_rgba(14,165,233,0.12)]">
+              {isLoading && <div className="absolute inset-6 z-20 rounded-[1.5rem] skeleton-panel" />}
+              <img src={portfolio.profile.portrait || "/portrait.png"} alt={portfolio.profile.name} className="relative z-10 mx-auto max-h-[660px] w-full object-contain portrait-mask" />
+              <div className="absolute bottom-5 left-5 right-5 z-20 rounded-2xl border border-white/10 bg-[#020817]/80 p-4 backdrop-blur">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-300">Available for</p>
+                <p className="mt-1 text-sm leading-6 text-gray-300">{portfolio.profile.contactCopy}</p>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="border-y border-white/10 bg-white/[0.03]">
+        <section className="border-y border-sky-300/10 bg-sky-950/20">
           <div className="mx-auto grid max-w-7xl grid-cols-1 divide-y divide-white/10 px-4 sm:px-6 md:grid-cols-3 md:divide-x md:divide-y-0">
             {portfolio.highlights.map((item) => (
               <div key={item.id} className="py-8 md:px-8">
-                <p className="text-2xl font-black text-white">{item.value}</p>
-                <p className="mt-2 text-sm text-gray-400">{item.label}</p>
+                <p className="text-3xl font-black text-white">{item.value}</p>
+                <p className="mt-2 text-sm font-medium text-gray-400">{item.label}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <section id="about" className="mx-auto grid max-w-7xl gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-300">Background</p>
-            <h2 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">{portfolio.about.title}</h2>
-          </div>
-          <div className="space-y-6 text-lg leading-8 text-gray-300">
-            {portfolio.about.paragraphs.map((paragraph) => <p key={paragraph.id}>{paragraph.text}</p>)}
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
-          <div className="marquee-container border-y border-white/10 py-5">
+        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+          <div className="marquee-container border-y border-sky-300/10 py-5">
             <div className="flex shrink-0 animate-marquee items-center gap-4">
               {[...portfolio.skills, ...portfolio.skills].map((skill, index) => <SkillPill key={`${skill}-${index}`}>{skill}</SkillPill>)}
             </div>
           </div>
         </section>
 
+        <section id="about" className="mx-auto grid max-w-7xl gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <SectionEyebrow>About Sean</SectionEyebrow>
+            <h2 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">{portfolio.about.title}</h2>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <CapabilityCard icon={Code2} title="Software" text="React, Node, Electron, and practical web app workflows." />
+              <CapabilityCard icon={BarChart3} title="Analytics" text="Business-oriented data views, dashboards, and decision support." />
+              <CapabilityCard icon={Camera} title="Media Systems" text="Creative production experience with event and camera workflows." />
+            </div>
+          </div>
+          <div className="space-y-6 text-lg leading-8 text-gray-300">
+            {portfolio.about.paragraphs.map((paragraph) => <p key={paragraph.id}>{paragraph.text}</p>)}
+          </div>
+        </section>
+
         <section id="work" className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
           <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-300">Selected Work</p>
+              <SectionEyebrow>Recent Projects</SectionEyebrow>
               <h2 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">Projects built for real workflows.</h2>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => navigate("/it")} className="rounded-md border border-white/15 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10">IT Portfolio</button>
-              <button onClick={() => navigate("/media")} className="rounded-md border border-amber-300/25 px-4 py-3 text-sm font-bold text-amber-100 transition hover:bg-amber-400/10">Media</button>
+              <button onClick={() => navigate("/it")} className="rounded-full border border-sky-300/25 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-400/10">IT Portfolio</button>
+              <button onClick={() => navigate("/media")} className="rounded-full border border-orange-300/25 px-4 py-3 text-sm font-bold text-orange-100 transition hover:bg-orange-400/10">Media</button>
             </div>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
-            {featured.map((project) => <ProjectCard key={project.id} project={project} navigate={navigate} />)}
+            {isLoading
+              ? Array.from({ length: 4 }).map((_, index) => <ProjectCardSkeleton key={index} />)
+              : featured.map((project) => <ProjectCard key={project.id} project={project} navigate={navigate} />)}
           </div>
         </section>
 
         <section className="mx-auto grid max-w-7xl gap-8 px-4 py-24 sm:px-6 lg:grid-cols-[0.7fr_1.3fr]">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-300">Experience</p>
+            <SectionEyebrow>Experience</SectionEyebrow>
             <h2 className="mt-4 text-3xl font-black text-white">Practice in professional and community settings.</h2>
           </div>
           <div className="space-y-4">
@@ -630,7 +660,7 @@ function HomePage({ portfolio, navigate, openContact, openStack, isAdmin, logout
   );
 }
 
-function PortfolioListing({ portfolio, type, navigate, openContact, openStack, isAdmin, logout }) {
+function PortfolioListing({ portfolio, type, navigate, openContact, openStack, isAdmin, logout, isLoading }) {
   const tone = type === "media" ? "amber" : "blue";
   const projects = portfolio.projects.filter((project) => project.type === type);
 
@@ -646,7 +676,9 @@ function PortfolioListing({ portfolio, type, navigate, openContact, openStack, i
           <h1 className="mt-4 text-4xl font-black tracking-tight text-white sm:text-6xl">{type === "media" ? "Creative work with structure and pace." : "Software projects with practical outcomes."}</h1>
         </div>
         <div className="grid gap-5 md:grid-cols-2">
-          {projects.map((project) => <ProjectCard key={project.id} project={project} navigate={navigate} tone={tone} />)}
+          {isLoading
+            ? Array.from({ length: 4 }).map((_, index) => <ProjectCardSkeleton key={index} />)
+            : projects.map((project) => <ProjectCard key={project.id} project={project} navigate={navigate} tone={tone} />)}
         </div>
       </main>
       <Footer navigate={navigate} />
@@ -700,14 +732,28 @@ function ProjectDetail({ portfolio, project, navigate, openContact, openStack, i
 
 function ProjectCard({ project, navigate, tone = "blue" }) {
   const Icon = iconMap[project.icon] || Code2;
-  const accent = tone === "amber" || project.type === "media" ? "text-amber-300 bg-amber-400/10" : "text-blue-300 bg-blue-400/10";
+  const isWarm = tone === "amber" || project.type === "media";
+  const accent = isWarm ? "text-orange-200 bg-orange-400/10 border-orange-300/20" : "text-sky-200 bg-sky-400/10 border-sky-300/20";
 
   return (
-    <article className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.035] transition hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.06]">
-      {project.mediaUrl && <MediaFrame src={project.mediaUrl} title={project.title} compact />}
+    <article className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] transition duration-300 hover:-translate-y-1 hover:border-sky-300/30 hover:bg-white/[0.06] hover:shadow-[0_24px_80px_rgba(14,165,233,0.10)]">
+      {project.mediaUrl ? (
+        <MediaFrame src={project.mediaUrl} title={project.title} compact />
+      ) : (
+        <div className="relative aspect-[16/9] overflow-hidden border-b border-white/10 bg-[#031126]">
+          <div className="absolute inset-0 blueprint-grid opacity-50" />
+          <div className={`absolute left-5 top-5 flex h-14 w-14 items-center justify-center rounded-2xl border ${accent}`}>
+            <Icon className="h-7 w-7" />
+          </div>
+          <div className="absolute bottom-5 left-5 right-5">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{project.category}</p>
+            <p className="mt-2 line-clamp-2 text-2xl font-black text-white">{project.title}</p>
+          </div>
+        </div>
+      )}
       <div className="p-6 sm:p-8">
         <div className="mb-6 flex items-start justify-between gap-4">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${accent}`}>
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${accent}`}>
             <Icon className="h-5 w-5" />
           </div>
           <span className="text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">{project.date}</span>
@@ -718,9 +764,52 @@ function ProjectCard({ project, navigate, tone = "blue" }) {
         <div className="mt-6 flex flex-wrap gap-2">
           {project.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded-md border border-white/10 px-2.5 py-1 text-xs text-gray-300">{tag}</span>)}
         </div>
-        <button onClick={() => navigate(`/project/${project.id}`)} className="mt-7 inline-flex items-center gap-2 text-sm font-bold text-white transition group-hover:text-blue-200">
+        <button onClick={() => navigate(`/project/${project.id}`)} className="mt-7 inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm font-bold text-white transition group-hover:border-sky-300/30 group-hover:text-sky-200">
           Read case study <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
         </button>
+      </div>
+    </article>
+  );
+}
+
+function ProjectCardSkeleton() {
+  return (
+    <article className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]">
+      <SkeletonBlock className="aspect-[16/9] rounded-none" />
+      <div className="space-y-4 p-6 sm:p-8">
+        <SkeletonBlock className="h-10 w-10 rounded-xl" />
+        <SkeletonBlock className="h-7 w-2/3" />
+        <SkeletonBlock className="h-4 w-1/3" />
+        <SkeletonBlock className="h-4 w-full" />
+        <SkeletonBlock className="h-4 w-5/6" />
+        <div className="flex gap-2">
+          <SkeletonBlock className="h-8 w-20 rounded-full" />
+          <SkeletonBlock className="h-8 w-24 rounded-full" />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function SkeletonBlock({ className = "" }) {
+  return <div className={`skeleton-block rounded-md ${className}`} />;
+}
+
+function SectionEyebrow({ children }) {
+  return <p className="inline-flex rounded-md border border-sky-300/15 bg-sky-400/10 px-3 py-2 text-xs font-black uppercase tracking-[0.24em] text-sky-300">{children}</p>;
+}
+
+function CapabilityCard({ icon: Icon, title, text }) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-5">
+      <div className="flex items-start gap-4">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-300/20 bg-sky-400/10 text-sky-200">
+          <Icon className="h-5 w-5" />
+        </span>
+        <span>
+          <span className="block font-black text-white">{title}</span>
+          <span className="mt-1 block text-sm leading-6 text-gray-400">{text}</span>
+        </span>
       </div>
     </article>
   );
@@ -745,7 +834,7 @@ function SkillPill({ children }) {
 
 function ExperienceRow({ item }) {
   return (
-    <article className="rounded-lg border border-white/10 bg-white/[0.035] p-6">
+    <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 transition hover:border-sky-300/25 hover:bg-white/[0.055]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-xl font-bold text-white">{item.title}</h3>
@@ -760,14 +849,14 @@ function ExperienceRow({ item }) {
 
 function ContactBand({ portfolio, openContact }) {
   return (
-    <section className="border-y border-white/10 bg-white/[0.03]">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-14 sm:px-6 md:flex-row md:items-center md:justify-between">
+    <section className="border-y border-sky-300/10 bg-[#031126]">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-16 sm:px-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-300">Get in touch</p>
-          <h2 className="mt-3 text-3xl font-black text-white">Let’s build something useful.</h2>
+          <SectionEyebrow>Get in touch</SectionEyebrow>
+          <h2 className="mt-4 text-3xl font-black text-white sm:text-5xl">Let’s build something useful.</h2>
           <p className="mt-3 max-w-2xl text-gray-400">{portfolio.profile.contactCopy}</p>
         </div>
-        <button onClick={openContact} className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-blue-100">
+        <button onClick={openContact} className="inline-flex items-center justify-center gap-2 rounded-full bg-sky-400 px-6 py-4 text-sm font-black uppercase tracking-[0.12em] text-[#020817] transition hover:bg-sky-300">
           Contact Details <Mail className="h-4 w-4" />
         </button>
       </div>
